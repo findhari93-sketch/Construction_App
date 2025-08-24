@@ -1,0 +1,68 @@
+Folder PATH listing for volume Windows-SSD
+Volume serial number is B291-7F77
+C:.
+¦   project_tree.txt
+¦   
++---app
+¦   ¦   favicon.ico
+¦   ¦   globals.css
+¦   ¦   layout.tsx
+¦   ¦   page.module.css
+¦   ¦   page.tsx
+¦   ¦   
+¦   +---api
+¦   +---catalog
+¦   ¦       page.tsx
+¦   ¦       store.ts
+¦   ¦       
+¦   +---dashboard
+¦   ¦       page.tsx
+¦   ¦       
+¦   +---equipment
+¦   ¦       page.tsx
+¦   ¦       
+¦   +---expenses
+¦   ¦   ¦   data.ts
+¦   ¦   ¦   page.tsx
+¦   ¦   ¦   
+¦   ¦   +---comps
+¦   ¦           ConfirmDialog.tsx
+¦   ¦           DateNavigator.tsx
+¦   ¦           ExpenseForm.tsx
+¦   ¦           ExpenseTable.tsx
+¦   ¦           
+¦   +---labour-contracts
+¦   ¦       page.tsx
+¦   ¦       
+¦   +---materials
+¦   ¦       page.tsx
+¦   ¦       
+¦   +---test-supabase
+¦           page.tsx
+¦           
++---components
+¦   +---common
+¦   ¦       AppContainer.tsx
+¦   ¦       AppNavbar.tsx
+¦   ¦       ClientThemeProvider.tsx
+¦   ¦       ConfirmDialog.tsx
+¦   ¦       
+¦   +---forms
+¦           FormTextField.tsx
+¦           
++---lib
+¦       data.ts
+¦       graphExcel.ts
+¦       msal.ts
+¦       routes.ts
+¦       supabaseClient.ts
+¦       theme.ts
+¦       types.ts
+¦       
++---store
+¦       expenseStore.ts
+¦       uiStore.ts
+¦       
++---styles
+        globals.css
+        
