@@ -16,17 +16,15 @@ export type ExpenseRow = {
   quantity: number;
   pricePerUnit: number;
   amount: number;
-  paidInitially: number;
+  paidInitially: string; // changed from number -> string
   settledBy: string;
   paymentType: string;
   paidTo: string;
   mobile: string;
-  billLink?: string;
-  receiptLink?: string;
+  billLink: string;
+  receiptLink: string;
   notes: string;
-
-  // NEW:
-  excelSynced?: boolean; // default false
+  excelSynced?: boolean;
 };
 
 type ExpenseState = {

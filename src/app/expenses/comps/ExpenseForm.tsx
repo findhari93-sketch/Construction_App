@@ -70,7 +70,7 @@ const schema = z.object({
   quantity: z.coerce.number().gt(0, "Must be > 0"),
   pricePerUnit: z.coerce.number().min(0, "Must be ≥ 0"),
   amount: z.coerce.number().min(0, "Must be ≥ 0"),
-  paidInitially: z.coerce.number().min(0, "Must be ≥ 0"),
+  paidInitially: z.string().min(1, "paid Initially by is required"),
   settledBy: z.string().min(1, "Settled by is required"),
   paymentType: z.string().min(1, "Payment type is required"),
   paidTo: z.string().min(1, "Paid to is required"),
@@ -100,20 +100,18 @@ const workPhases = [
   "Finishing",
 ];
 
-const units = [
-  "Nos",
-  "Kg",
-  "Ton",
-  "Bag",
-  "Cft",
-  "Sqft",
-  "Meter",
-  "Hour",
-  "Day",
-];
-
 const paymentTypes = ["Cash", "UPI", "Card", "Bank Transfer", "Cheque"];
 const paidByOptions = ["Trust", "Hari", "Amma"];
+
+/* typed helper to avoid `any` casts for subitem rows */
+type SubitemWithUnits = SubitemPathRow & {
+  unit?: string;
+  item_unit?: string;
+  sub_item_name: string;
+  item_name?: string;
+  sub_category_name?: string;
+  category_name?: string;
+};
 
 /* ---------------- component ---------------- */
 
@@ -129,8 +127,6 @@ export default function ExpenseForm({
   editingExpense,
   onSaved,
   onCancelEdit,
-  onAddCloud, // not used here, keep if you wire later
-  onUpdateCloud, // not used here, keep if you wire later
 }: Props) {
   const add = useExpenseStore((s) => s.add);
   const update = useExpenseStore((s) => s.update);
@@ -157,7 +153,7 @@ export default function ExpenseForm({
       quantity: 1,
       pricePerUnit: 0,
       amount: 0,
-      paidInitially: 0,
+      paidInitially: "",
       settledBy: "",
       paymentType: "",
       paidTo: "",
@@ -206,8 +202,8 @@ export default function ExpenseForm({
       if (found.category_name)
         setValue("category", found.category_name, { shouldValidate: true });
       // unit: prefer subitem.unit, fallback to item_unit, otherwise "None"
-      const resolvedUnit =
-        (found as any).unit ?? (found as any).item_unit ?? "None";
+      const f = found as SubitemWithUnits;
+      const resolvedUnit = f.unit ?? f.item_unit ?? "None";
       setValue("unit", resolvedUnit, { shouldValidate: true });
     }
   }, [subItemInput, subitemOptions, setValue]);
@@ -239,6 +235,8 @@ export default function ExpenseForm({
   useEffect(() => {
     if (editingExpense) {
       const { id: _ignore, createdAt: _c, ...formVals } = editingExpense;
+      void _ignore;
+      void _c;
       reset(formVals);
       setDate(formVals.date);
       setSubItemInput(formVals.subItem ?? "");
@@ -250,6 +248,7 @@ export default function ExpenseForm({
   // auto amount
   const watchQty = useWatch({ control, name: "quantity" });
   const watchPrice = useWatch({ control, name: "pricePerUnit" });
+  const watchUnit = useWatch({ control, name: "unit" });
   useEffect(() => {
     const q = Number(watchQty);
     const p = Number(watchPrice);
@@ -258,11 +257,11 @@ export default function ExpenseForm({
     }
   }, [watchQty, watchPrice, setValue]);
 
-  const FieldError = ({ name }: { name: keyof FormData }) => (
-    <FormHelperText error>
-      {(errors[name]?.message as string) || " "}
-    </FormHelperText>
-  );
+  const FieldError = ({ name }: { name: keyof FormData }) => {
+    const msg = errors[name]?.message as string | undefined;
+    if (!msg) return null; // only render helper when there is an actual error/message
+    return <FormHelperText error>{msg}</FormHelperText>;
+  };
 
   const onSubmit: SubmitHandler<FormData> = async (values) => {
     // make sure we have a resolved subitem (either selectedSubitem or match from input)
@@ -281,18 +280,17 @@ export default function ExpenseForm({
     }
 
     // populate dependent fields before DB/local save
-    setValue("subItem", resolved.sub_item_name, { shouldValidate: true });
-    if (resolved.item_name)
-      setValue("item", resolved.item_name, { shouldValidate: true });
-    if (resolved.sub_category_name)
-      setValue("subCategory", resolved.sub_category_name, {
+    const r = resolved as SubitemWithUnits;
+    setValue("subItem", r.sub_item_name, { shouldValidate: true });
+    if (r.item_name) setValue("item", r.item_name, { shouldValidate: true });
+    if (r.sub_category_name)
+      setValue("subCategory", r.sub_category_name, {
         shouldValidate: true,
       });
-    if (resolved.category_name)
-      setValue("category", resolved.category_name, { shouldValidate: true });
+    if (r.category_name)
+      setValue("category", r.category_name, { shouldValidate: true });
     // ensure unit is set (prefer subitem.unit, fallback to item_unit, else "None")
-    const finalUnit =
-      (resolved as any).unit ?? (resolved as any).item_unit ?? "None";
+    const finalUnit = r.unit ?? r.item_unit ?? "None";
     setValue("unit", finalUnit, { shouldValidate: true });
 
     if (editingExpense) {
@@ -304,14 +302,12 @@ export default function ExpenseForm({
       const payload: FormValues = {
         date: values.date,
         spentOn: values.spentOn,
-        category: (resolved as any).category_name ?? values.category ?? "",
-        subCategory:
-          (resolved as any).sub_category_name ??
-          values.subCategory ??
-          undefined,
-        item: (resolved as any).item_name ?? values.item ?? "",
+        category: r.category_name ?? values.category ?? "",
+        subCategory: r.sub_category_name ?? values.subCategory ?? undefined,
+        item: r.item_name ?? values.item ?? "",
+        subItem: r.sub_item_name ?? values.subItem ?? "",
         workPhase: values.workPhase,
-        unit: (resolved as any).unit ?? (resolved as any).item_unit ?? "None",
+        unit: r.unit ?? r.item_unit ?? "None",
         quantity: values.quantity,
         pricePerUnit: values.pricePerUnit,
         amount: values.amount,
@@ -343,7 +339,8 @@ export default function ExpenseForm({
           quantity: saved.quantity,
           pricePerUnit: saved.pricePerUnit,
           amount: saved.amount,
-          paidInitially: saved.paidInitially,
+          // coerce to string so ExpenseRow.paidInitially stays a string
+          paidInitially: String(saved.paidInitially),
           settledBy: saved.settledBy,
           paymentType: saved.paymentType,
           paidTo: saved.paidTo,
@@ -389,7 +386,7 @@ export default function ExpenseForm({
           item: "",
           subItem: "",
           notes: "",
-          paidInitially: 0,
+          paidInitially: "",
         });
         setSubItemInput("");
         setSelectedSubitem(null);
@@ -525,10 +522,9 @@ export default function ExpenseForm({
                             });
                           }
                           // populate unit from selectedSubitem (or fallback)
+                          const sel = selected as SubitemWithUnits;
                           const resolvedUnit =
-                            (selected as any).unit ??
-                            (selected as any).item_unit ??
-                            "None";
+                            sel.unit ?? sel.item_unit ?? "None";
                           setValue("unit", resolvedUnit, {
                             shouldValidate: true,
                             shouldDirty: true,
@@ -550,10 +546,20 @@ export default function ExpenseForm({
                 <FieldError name="subItem" />
               </Box>
 
-              {/* Display resolved path (read-only) below subItem */}
-              <Box>
-                {selectedSubitem ? (
-                  <Box sx={{ mt: 1 }}>
+              {/* Display resolved path (compact and only when there's no error) */}
+              <Box sx={{ marginTop: "5px !important" }}>
+                {errors.subItem ? (
+                  // if there's an error, show the error helper and do not render the chip
+                  <FieldError name="subItem" />
+                ) : selectedSubitem ? (
+                  <Box
+                    sx={{
+                      // small vertical gap
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                    }}
+                  >
                     <Chip
                       label={`${selectedSubitem.category_name ?? "—"} / ${
                         selectedSubitem.sub_category_name ?? "—"
@@ -564,7 +570,7 @@ export default function ExpenseForm({
                       <Typography
                         variant="caption"
                         color="text.secondary"
-                        sx={{ ml: 1 }}
+                        sx={{ ml: 0 }}
                       >
                         Unit: {selectedSubitem.unit}
                       </Typography>
@@ -574,7 +580,7 @@ export default function ExpenseForm({
                   <Typography
                     variant="caption"
                     color="text.secondary"
-                    sx={{ mt: 1 }}
+                    sx={{ mt: 0.5 }}
                   >
                     Select a suggestion to auto-fill Category / Sub-category /
                     Item
@@ -609,95 +615,100 @@ export default function ExpenseForm({
             </Stack>
           </Box>
 
-          {/* Section: Money & Quantity */}
+          {/* Section: Money & Quantity - compact single-line UI */}
           <Box sx={{ mb: 2 }}>
             <Typography variant="subtitle2" fontWeight={700} gutterBottom>
               Quantity & Pricing
             </Typography>
             <Divider sx={{ mb: 2 }} />
 
-            <Stack spacing={2}>
-              <Box>
-                <Controller
-                  name="quantity"
-                  control={control}
-                  render={({ field }) => (
-                    <TextField
-                      size="small"
-                      {...field}
-                      label="Quantity"
-                      type="number"
-                      inputProps={{ step: "0.01" }}
-                      fullWidth
-                      error={!!errors.quantity}
-                    />
-                  )}
-                />
-                <FieldError name="quantity" />
-              </Box>
+            {/* single-row: Quantity × Price/unit  → Total */}
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1.5,
+                flexWrap: "wrap",
+              }}
+            >
+              <Controller
+                name="quantity"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    size="small"
+                    {...field}
+                    label="Quantity"
+                    type="number"
+                    inputProps={{ step: "0.01", min: 0 }}
+                    error={!!errors.quantity}
+                    sx={{ width: 140 }}
+                  />
+                )}
+              />
 
-              <Box>
-                <Controller
-                  name="pricePerUnit"
-                  control={control}
-                  render={({ field }) => (
-                    <TextField
-                      size="small"
-                      {...field}
-                      label="Price / Unit"
-                      type="number"
-                      inputProps={{ step: "0.01" }}
-                      fullWidth
-                      error={!!errors.pricePerUnit}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">₹</InputAdornment>
-                        ),
-                      }}
-                    />
-                  )}
-                />
-                <FieldError name="pricePerUnit" />
-              </Box>
+              <Typography variant="body2" sx={{ mx: 0.5 }}>
+                ×
+              </Typography>
 
-              <Box>
-                <Controller
-                  name="amount"
-                  control={control}
-                  render={({ field }) => (
-                    <TextField
-                      size="small"
-                      {...field}
-                      label="Amount"
-                      type="number"
-                      inputProps={{ step: "0.01" }}
-                      fullWidth
-                      error={!!errors.amount}
-                    />
-                  )}
-                />
-                <FieldError name="amount" />
-              </Box>
+              <Controller
+                name="pricePerUnit"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    size="small"
+                    {...field}
+                    label={`Price / ${
+                      watchUnit && watchUnit !== "None" ? watchUnit : "Unit"
+                    }`}
+                    type="number"
+                    inputProps={{ step: "0.01", min: 0 }}
+                    error={!!errors.pricePerUnit}
+                    sx={{ width: 180 }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">₹</InputAdornment>
+                      ),
+                      endAdornment:
+                        watchUnit && watchUnit !== "None" ? (
+                          <InputAdornment position="end">
+                            {watchUnit}
+                          </InputAdornment>
+                        ) : undefined,
+                    }}
+                  />
+                )}
+              />
 
-              <Box>
-                <Controller
-                  name="paidInitially"
-                  control={control}
-                  render={({ field }) => (
-                    <TextField
-                      size="small"
-                      {...field}
-                      label="Paid Initially"
-                      type="number"
-                      inputProps={{ step: "0.01" }}
-                      fullWidth
-                      error={!!errors.paidInitially}
-                    />
-                  )}
-                />
-                <FieldError name="paidInitially" />
+              {/* computed total shown prominently */}
+              <Box sx={{ ml: "auto", display: "flex", alignItems: "center" }}>
+                <Typography
+                  variant="subtitle1"
+                  sx={{ color: "success.main", fontWeight: 700, mr: 1 }}
+                >
+                  {(() => {
+                    const q = Number(watchQty) || 0;
+                    const p = Number(watchPrice) || 0;
+                    return `₹ ${Number((q * p).toFixed(2)).toLocaleString()}`;
+                  })()}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Total
+                </Typography>
               </Box>
-            </Stack>
+            </Box>
+
+            {/* inline validation helpers (will only render when message exists) */}
+            <Box sx={{ display: "flex", gap: 2, mt: 0.5 }}>
+              <Box>
+                {errors.quantity ? <FieldError name="quantity" /> : null}
+              </Box>
+              <Box>
+                {errors.pricePerUnit ? (
+                  <FieldError name="pricePerUnit" />
+                ) : null}
+              </Box>
+            </Box>
           </Box>
 
           {/* Section: Payment */}
@@ -756,6 +767,32 @@ export default function ExpenseForm({
                   )}
                 />
                 <FieldError name="paymentType" />
+              </Box>
+
+              {/* Paid initially (by) - restored as a dropdown */}
+              <Box>
+                <Controller
+                  name="paidInitially"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      size="small"
+                      select
+                      {...field}
+                      label="Paid initially (By)"
+                      fullWidth
+                      error={!!errors.paidInitially}
+                    >
+                      <MenuItem value="">Select</MenuItem>
+                      {["Amma", "Ajith", "Trust", "Other"].map((opt) => (
+                        <MenuItem key={opt} value={opt}>
+                          {opt}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  )}
+                />
+                <FieldError name="paidInitially" />
               </Box>
 
               <Box>
@@ -905,7 +942,7 @@ export default function ExpenseForm({
                   quantity: 1,
                   pricePerUnit: 0,
                   amount: 0,
-                  paidInitially: 0,
+                  paidInitially: "", // changed from 0 -> ""
                   settledBy: "",
                   paymentType: "",
                   paidTo: "",
@@ -940,9 +977,9 @@ export default function ExpenseForm({
                   quantity: 1,
                   pricePerUnit: 0,
                   amount: 0,
-                  paidInitially: 0,
+                  paidInitially: "", // changed from 0 -> ""
                   settledBy: "",
-                  paymentType: "",
+                  paymentType: "", // changed from 0 as unknown as string -> ""
                   paidTo: "",
                   mobile: "",
                   billLink: "",

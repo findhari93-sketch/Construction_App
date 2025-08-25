@@ -8,12 +8,13 @@ export type FormValues = {
   category: string;
   subCategory?: string;
   item: string;
+  subItem: string;
   workPhase: string;
   unit: string;
   quantity: number;
   pricePerUnit: number;
   amount: number;
-  paidInitially: number;
+  paidInitially: string; // changed from number -> string
   settledBy: string;
   paymentType: string;
   paidTo: string;
@@ -37,7 +38,7 @@ export type DbExpenseRow = {
   quantity: number;
   price_per_unit: number;
   amount: number;
-  paid_initially: number;
+  paid_initially: string;
   settled_by: string;
   payment_type: string;
   paid_to: string;
@@ -64,7 +65,7 @@ export type UiExpenseRow = {
   quantity: number;
   pricePerUnit: number;
   amount: number;
-  paidInitially: number;
+  paidInitially: string;
   settledBy: string;
   paymentType: string;
   paidTo: string;
